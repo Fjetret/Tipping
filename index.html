@@ -19,25 +19,64 @@
             const [selectedDay, setSelectedDay] = useState('midtuke');
             const [matches, setMatches] = useState([]);
             const [selections, setSelections] = useState({});
+            const [loading, setLoading] = useState(false);
+            const [error, setError] = useState(null);
 
-            // Oppsett av testdata
             const days = {
-                midtuke: "https://www.norsk-tipping.no/sport/tipping/spill?day=3",
-                lordag: "https://www.norsk-tipping.no/sport/tipping/spill?day=1",
-                sondag: "https://www.norsk-tipping.no/sport/tipping/spill?day=2"
+                midtuke: "3",
+                lordag: "1",
+                sondag: "2"
             };
 
-            // Initier 12 tomme kamper
+            const fetchMatches = async (day) => {
+                setLoading(true);
+                setError(null);
+                try {
+                    const proxyUrl = 'https://api.allorigins.win/raw?url=';
+                    const tippingUrl = encodeURIComponent(`https://www.norsk-tipping.no/sport/tipping/spill?day=${days[day]}`);
+                    
+                    const response = await fetch(proxyUrl + tippingUrl);
+                    if (!response.ok) throw new Error('Nettverksfeil');
+                    
+                    const html = await response.text();
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(html, 'text/html');
+                    
+                    // Finn alle span elementer som matcher mønsteret for kampinfo
+                    const matchElements = doc.querySelectorAll('.flex.justify-start.text-xs.md\\:text-sm.text-ellipsis');
+                    
+                    const newMatches = Array(12).fill(null).map((_, index) => {
+                        const matchElement = Array.from(matchElements).find(el => el.textContent.startsWith(`${index + 1} `));
+                        if (matchElement) {
+                            const matchText = matchElement.textContent;
+                            const [_, ...teams] = matchText.split(' '); // Fjern kampnummer
+                            const [homeTeam, awayTeam] = teams.join(' ').split(' - ');
+                            return {
+                                id: index + 1,
+                                homeTeam: homeTeam || '',
+                                awayTeam: awayTeam || ''
+                            };
+                        }
+                        return {
+                            id: index + 1,
+                            homeTeam: '',
+                            awayTeam: ''
+                        };
+                    });
+                    
+                    setMatches(newMatches);
+                } catch (err) {
+                    setError('Kunne ikke hente kampene: ' + err.message);
+                    console.error('Feil ved henting av kamper:', err);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
             useEffect(() => {
-                const newMatches = Array(12).fill(null).map((_, index) => ({
-                    id: index + 1,
-                    homeTeam: '',
-                    awayTeam: ''
-                }));
-                setMatches(newMatches);
+                fetchMatches(selectedDay);
             }, [selectedDay]);
 
-            // Håndter valg av H/U/B
             const handleSelection = (matchId, type) => {
                 setSelections(prev => {
                     const current = prev[matchId] || {};
@@ -67,16 +106,25 @@
                                 <option value="lordag">Lørdag</option>
                                 <option value="sondag">Søndag</option>
                             </select>
-                            <div className="mt-2">
-                                <a 
-                                    href={days[selectedDay]} 
-                                    target="_blank" 
-                                    className="text-blue-600 hover:text-blue-800"
-                                >
-                                    Åpne kampene på norsk-tipping.no
-                                </a>
-                            </div>
                         </div>
+
+                        {loading && (
+                            <div className="text-center p-4">
+                                Henter kampene...
+                            </div>
+                        )}
+
+                        {error && (
+                            <div className="text-red-600 p-4 border border-red-300 rounded mb-4">
+                                {error}
+                                <button 
+                                    onClick={() => fetchMatches(selectedDay)}
+                                    className="ml-4 px-3 py-1 bg-red-100 rounded hover:bg-red-200"
+                                >
+                                    Prøv igjen
+                                </button>
+                            </div>
+                        )}
 
                         <div className="overflow-x-auto">
                             <table className="w-full border-collapse">
@@ -96,30 +144,8 @@
                                         return (
                                             <tr key={match.id} className="hover:bg-gray-50">
                                                 <td className="p-2 border">{match.id}</td>
-                                                <td className="p-2 border">
-                                                    <input 
-                                                        type="text" 
-                                                        className="w-full p-1 border rounded"
-                                                        value={match.homeTeam}
-                                                        onChange={(e) => {
-                                                            const newMatches = [...matches];
-                                                            newMatches[match.id - 1].homeTeam = e.target.value;
-                                                            setMatches(newMatches);
-                                                        }}
-                                                    />
-                                                </td>
-                                                <td className="p-2 border">
-                                                    <input 
-                                                        type="text" 
-                                                        className="w-full p-1 border rounded"
-                                                        value={match.awayTeam}
-                                                        onChange={(e) => {
-                                                            const newMatches = [...matches];
-                                                            newMatches[match.id - 1].awayTeam = e.target.value;
-                                                            setMatches(newMatches);
-                                                        }}
-                                                    />
-                                                </td>
+                                                <td className="p-2 border">{match.homeTeam}</td>
+                                                <td className="p-2 border">{match.awayTeam}</td>
                                                 <td className="p-2 border text-center">
                                                     <input 
                                                         type="checkbox" 
