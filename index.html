@@ -36,40 +36,36 @@
                     const tippingUrl = encodeURIComponent(`https://www.norsk-tipping.no/sport/tipping/spill?day=${days[day]}`);
                     
                     const response = await fetch(proxyUrl + tippingUrl);
-                    if (!response.ok) throw new Error('Nettverksfeil');
-                    
                     const html = await response.text();
+                    
+                    // Parse HTML
                     const parser = new DOMParser();
                     const doc = parser.parseFromString(html, 'text/html');
                     
-                    // Finn alle span elementer som matcher mønsteret for kampinfo
-                    const matchElements = doc.querySelectorAll('.flex.justify-start.text-xs.md\\:text-sm.text-ellipsis');
+                    // Finn kampene
+                    const matchElements = doc.querySelectorAll('span.flex.justify-start');
+                    const newMatches = [];
                     
-                    const newMatches = Array(12).fill(null).map((_, index) => {
-                        const matchElement = Array.from(matchElements).find(el => el.textContent.startsWith(`${index + 1} `));
-                        if (matchElement) {
-                            const matchText = matchElement.textContent;
-                            const [_, ...teams] = matchText.split(' '); // Fjern kampnummer
-                            const [homeTeam, awayTeam] = teams.join(' ').split(' - ');
-                            return {
+                    matchElements.forEach((el, index) => {
+                        if (el.textContent.match(/^\d+\s/)) {  // Sjekk om teksten starter med et tall
+                            const matchText = el.textContent;
+                            const [, teams] = matchText.split(/^\d+\s/);
+                            const [homeTeam, awayTeam] = teams.split(' - ');
+                            
+                            newMatches.push({
                                 id: index + 1,
-                                homeTeam: homeTeam || '',
-                                awayTeam: awayTeam || ''
-                            };
+                                homeTeam: homeTeam?.trim() || '',
+                                awayTeam: awayTeam?.trim() || ''
+                            });
                         }
-                        return {
-                            id: index + 1,
-                            homeTeam: '',
-                            awayTeam: ''
-                        };
                     });
-                    
-                    setMatches(newMatches);
-                } catch (err) {
-                    setError('Kunne ikke hente kampene: ' + err.message);
-                    console.error('Feil ved henting av kamper:', err);
-                } finally {
+
+                    setMatches(newMatches.slice(0, 12));  // Kun de første 12 kampene
                     setLoading(false);
+                } catch (err) {
+                    setError('Kunne ikke hente kampene. Prøv igjen senere.');
+                    setLoading(false);
+                    console.error('Feil ved henting av kamper:', err);
                 }
             };
 
@@ -101,30 +97,27 @@
                                 value={selectedDay}
                                 onChange={(e) => setSelectedDay(e.target.value)}
                                 className="w-full max-w-xs p-2 border rounded shadow-sm"
+                                disabled={loading}
                             >
                                 <option value="midtuke">Midtuke</option>
                                 <option value="lordag">Lørdag</option>
                                 <option value="sondag">Søndag</option>
                             </select>
+                            
+                            <button 
+                                onClick={() => fetchMatches(selectedDay)}
+                                className="mt-2 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-gray-400"
+                                disabled={loading}
+                            >
+                                {loading ? 'Henter kamper...' : 'Oppdater kamper'}
+                            </button>
+
+                            {error && (
+                                <div className="mt-2 text-red-500">
+                                    {error}
+                                </div>
+                            )}
                         </div>
-
-                        {loading && (
-                            <div className="text-center p-4">
-                                Henter kampene...
-                            </div>
-                        )}
-
-                        {error && (
-                            <div className="text-red-600 p-4 border border-red-300 rounded mb-4">
-                                {error}
-                                <button 
-                                    onClick={() => fetchMatches(selectedDay)}
-                                    className="ml-4 px-3 py-1 bg-red-100 rounded hover:bg-red-200"
-                                >
-                                    Prøv igjen
-                                </button>
-                            </div>
-                        )}
 
                         <div className="overflow-x-auto">
                             <table className="w-full border-collapse">
